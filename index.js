@@ -4,10 +4,54 @@ const client = new Discord.Client();
 const fs = require("fs");
 const ytdl = require("ytdl-core");
 const tokenFile = require ("./token.json")
-var errormsg_noperms = [':x: ```Markdown\n< FoozBallKing Bot >\n<Error found!>\n[Error]: You have insufficient permissions\n\nYou must be the bot owner to do that command!\n```']
-var errormsg_voice = [':x: ```Markdown\n< FoozBallKing Bot >\n<Error found!>\n[Error]: Timed out\nThe bot was unable to join the voice channel.\n```']
-var errormsg_play = [':x: ```Markdown\n< FoozBallKing Bot >\n<Error found!>\n[Error]: Folder not found: "C:\\Users\\ASUS\\Downloads"\nThe bot was unable to play the song.\n```']
-var errormsg_argserr = [':x: ```Markdown\n< FoozBallKing Bot >\n<Error found!>\n[Error]: Not enough arguments!\n\n# The bot was unable to play the song.\n```']
+const forever = require('forever-monitor')
+var errormsg_noperms = [{embed: {
+    color: [170, 0, 0],
+    title: "Error",
+    description: 'You do not have permission!',
+
+    timestamp: new Date(),
+    footer: {
+      text: "Don't worry, get help from here: https://discord.gg/xgBaPPE"
+    }
+}
+}]
+var errormsg_voice = [{embed: {
+    color: [170, 0, 0],
+    title: "Error",
+    description: 'Timed out',
+
+    timestamp: new Date(),
+    footer: {
+      text: "Don't worry, get help from here: https://discord.gg/xgBaPPE"
+    }
+}
+}]
+var errormsg_play = [{embed: {
+    color: [170, 0, 0],
+    title: "Error",
+    description: 'No file found: `C:/Users/ASUS/Downloads/FBK Bot Songs/`',
+
+    timestamp: new Date(),
+    footer: {
+      text: "Don't worry, get help from here: https://discord.gg/xgBaPPE"
+    }
+}
+}]
+var errormsg_argserr = [{embed: {
+    color: [170, 0, 0],
+    title: "Error",
+    description: 'Incorrect arguments!',
+
+    timestamp: new Date(),
+    footer: {
+      text: "Don't worry, get help from here: https://discord.gg/xgBaPPE"
+    }
+}
+}]
+
+const msg = new Discord.Message();
+//https://discord.gg/xgBaPPE
 
 // /\ Do not touch. This is important for the entire bot.
 // If you got this code, edit it out as much as you want.
@@ -18,7 +62,7 @@ var prefix = "|"
 var bot_name = "FoozBallKing Bot v2.1"
 // Change to bot's name
 
-var build_number = "Build 31"
+var build_number = "Build 32"
 // Change to your build number
 
 var yt_api_key = "<none>"
@@ -27,7 +71,7 @@ var yt_api_key = "<none>"
 var bot_id = "292053219528671233"
 // Change to your bot's Client ID
 
-var version_bot = 'Build 31 (Built in 30/7/2017) (No music)'
+var version_bot = 'Build 32 (Built in 18/8/2017) (Music)'
 
 // \/ Change this ID to your 18 digit number ID. Use Developer Mode in Discord.
 var owner_id = "222955939714695168"
@@ -47,6 +91,9 @@ var token = 'You do not need this anymore.'
 var client_id = '292053219528671233'
 // Change to your bot's Client ID (Yes for bot_id too)
 
+var queue = {};
+const yt = require('ytdl-core')
+
 
 // \/ This will be for commands. Edit them as much as you want.
 // To add a command, follow what it says.
@@ -60,7 +107,7 @@ bot.on('message', (message) => {
     }
 
     if(message.content.startsWith(prefix + 'help')) {
-        message.channel.send('```Markdown\n< FoozBallKing Bot v2.1 Help >\n[1]: General\n[' + prefix + 'help]: Shows this command!\n[' + prefix + 'youtube]: Shows YT channels of TheFoozBallTable staff!\n[' + prefix + 'botspecs]: Shows the specs of the bot!\n[' + prefix + 'uptime]: Shows the uptime of the bot in microseconds!\n[' + prefix + 'botinfox]: Shows shorter bot info\n\n[2]: Owner Only\n[' + prefix + 'shutdown]: Shuts down the bot.\n[' + prefix + '|mtcmode]: Sets the bot in Maintenance Mode.\n< TO BE CONTINUED >\n```\n\nFor help, join https://discord.gg/8h2fJQG')
+        message.channel.send('```Markdown\n< FoozBallKing Bot v2.1 Help >\n[1]: General\n[' + prefix + 'help]: Shows this command!\n[' + prefix + 'youtube]: Shows YT channels of TheFoozBallTable staff!\n[' + prefix + 'botspecs]: Shows the specs of the bot!\n[' + prefix + 'uptime]: Shows the uptime of the bot in microseconds!\n[' + prefix + 'botinfox]: Shows shorter bot info\n\n[2]: Owner Only\n[' + prefix + 'shutdown]: Shuts down the bot.\n[' + prefix + '|mtcmode]: Sets the bot in Maintenance Mode.\n< TO BE CONTINUED >\n```\n\nFor help, join https://discord.gg/xgBaPPE')
         console.log(message.author + ' has typed "|help"!')
 
     }
@@ -68,11 +115,93 @@ bot.on('message', (message) => {
 	// START MUSIC
 	
     if(message.content.startsWith(prefix + 'play')) {
-		message.channel.send(errormsg_play)
-		message.channel.send('Reason of error: Incomplete')
-		console.log(message.author + ' has tried to play music, but the code is not finished!')
+		if (queue[msg.guild.id] === undefined) return msg.channel.send(`Add some songs to the queue first with ${prefix}add`);
+		if (!msg.guild.voiceConnection) return commands.join(msg).then(() => commands.play(msg));
+		if (queue[msg.guild.id].playing) return msg.channel.send('Already Playing');
+		let dispatcher;
+		queue[msg.guild.id].playing = true;
+
+		console.log(queue);
+		(function play(song) {
+			console.log(song);
+			if (song === undefined) return msg.channel.send('Queue is now empty.').then(() => {
+				queue[msg.guild.id].playing = false;
+				msg.member.voiceChannel.leave();
+			});
+			msg.channel.send(`Playing: **${song.title}** as requested by: **${song.requester}**`);
+			dispatcher = msg.guild.voiceConnection.playStream(yt(song.url, { audioonly: true }), { passes : tokens.passes });
+			let collector = msg.channel.createCollector(m => m);
+			const m = new Discord.Message()
+			collector.on('message', m => {
+				if (m.content.startsWith(prefix + 'pause')) {
+					msg.channel.send('paused').then(() => {dispatcher.pause();});
+				} else if (m.content.startsWith(prefix + 'resume')){
+					msg.channel.send('resumed').then(() => {dispatcher.resume();});
+				} else if (m.content.startsWith(prefix + 'skip')){
+					msg.channel.send('skipped').then(() => {dispatcher.end();});
+				} else if (m.content.startsWith(prefix + 'volume+')){
+					if (Math.round(dispatcher.volume*50) >= 100) return msg.channel.sendMessage(`Volume: ${Math.round(dispatcher.volume*50)}%`);
+					dispatcher.setVolume(Math.min((dispatcher.volume*50 + (2*(m.content.split('+').length-1)))/50,2));
+					msg.channel.send(`Volume: ${Math.round(dispatcher.volume*50)}%`);
+				} else if (m.content.startsWith(prefix + 'volume-')){
+					if (Math.round(dispatcher.volume*50) <= 0) return msg.channel.sendMessage(`Volume: ${Math.round(dispatcher.volume*50)}%`);
+					dispatcher.setVolume(Math.max((dispatcher.volume*50 - (2*(m.content.split('-').length-1)))/50,0));
+					msg.channel.send(`Volume: ${Math.round(dispatcher.volume*50)}%`);
+				} else if (m.content.startsWith(prefix + 'time')){
+					msg.channel.send(`time: ${Math.floor(dispatcher.time / 60000)}:${Math.floor((dispatcher.time % 60000)/1000) <10 ? '0'+Math.floor((dispatcher.time % 60000)/1000) : Math.floor((dispatcher.time % 60000)/1000)}`);
+				}
+			});
+			dispatcher.on('end', () => {
+				collector.stop();
+			});
+			dispatcher.on('error', (err) => {
+				return msg.channel.send('error: ' + err).then(() => {
+					collector.stop();
+				});
+			});
+		})
 	}
 	
+	if(message.content.startsWith(prefix + 'end')) {
+		return new Promise((resolve, reject) => {
+			const voiceChannel = msg.member.voiceChannel;
+			if (!voiceChannel || voiceChannel.type !== 'voice') return msg.channel.send(errormsg_play);
+			voiceChannel.join().then(connection => resolve(connection)).catch(err => reject(err));
+});
+	}
+
+	if(message.content.startsWith(prefix + 'add')) {
+		let url = msg.content.split(' ')[1];
+		if (url == '' || url === undefined) return msg.channel.send(`You must add a YouTube video url, or id after ${prefix}add`);
+		yt.getInfo(url, (err, info) => {
+			if(err) return msg.channel.send({embed: {
+    color: [170, 0, 0],
+    author: {
+      name: message.author.username,
+      icon_url: message.author.avatarURL
+    },
+    title: "Error",
+    description: `Invalid YouTube URL! \`${err}\``,
+
+    timestamp: new Date(),
+    footer: {
+      text: "Don't worry, get help from here: https://discord.gg/xgBaPPE"
+    }
+}
+});
+			if (!queue.hasOwnProperty(msg.guild.id)) queue[msg.guild.id] = {}, queue[msg.guild.id].playing = false, queue[msg.guild.id].songs = [];
+			queue[msg.guild.id].songs.push({url: url, title: info.title, requester: msg.author.username});
+			msg.channel.send(`added **${info.title}** to the queue`);
+});
+	}
+
+	if(message.content.startsWith(prefix + 'queue')) {
+		if (queue[msg.guild.id] === undefined) return msg.channel.send(`Add some songs to the queue first with ${prefix}add!`);
+		let tosend = [];
+		queue[msg.guild.id].songs.forEach((song, i) => { tosend.push(`${i+1}. ${song.title} - Requested by: ${song.requester}`);});
+msg.channel.send(`__**${msg.guild.name}'s Music Queue:**__ Currently **${tosend.length}** songs queued ${(tosend.length > 15 ? '*[Only next 15 shown]*' : '')}\n\`\`\`${tosend.slice(0,15).join('\n')}\`\`\``);
+	}
+
 	// END MUSIC
     
     if(message.content.startsWith(prefix + 'youtube')) {
@@ -105,10 +234,7 @@ bot.on('message', (message) => {
             bot.user.setGame('Restarting...')
             bot.user.setStatus('invisible')
             bot.destroy()
-            console.log('The bot is now shut down. Attempting to log back in...')
-            bot.login(token)
-			message.channel.send(':heavy_check_mark: The bot has successfully restarted.')
-			console.log('The bot has successfully restarted.')
+            process.exit()
         } else {
             // No perms
             message.channel.send(errormsg_noperms)
@@ -233,7 +359,7 @@ bot.on('message', (message) => {
 	const args = message.content.split(" ").slice(1);
 
 	if (message.content.startsWith(prefix + "eval")) {
-		if(message.author.id !== owner_id || host_id) {
+		if(message.author.id !== owner_id && host_id) {
 			message.channel.send(errormsg_noperms)
 		}
 		try {
@@ -248,6 +374,39 @@ bot.on('message', (message) => {
       message.channel.send(`\`ERROR\` \`\`\`xl\n${clean(err)}\n\`\`\``);
     }
 	}
+
+    if(message.content.startsWith(prefix + 'embed')) {
+		message.delete()
+        var descembed = args.join(" ");
+        message.channel.send({embed: {
+    color: 3447003,
+    author: {
+      name: message.author.username,
+      icon_url: message.author.avatarURL
+    },
+    title: "Info",
+    description: descembed,
+
+    timestamp: new Date(),
+    footer: {
+      icon_url: message.author.avatarURL,
+      text: "© TheFoozBallTable"
+    }
+  }
+});
+    }
+
+    
+
+    if(message.content.startsWith(prefix + 'say')) {
+        message.delete()
+        var saytext = args.join(" ");
+        message.channel.send(saytext)
+    }
+
+    if(message.content.startsWith(prefix + 'guilds')) {
+        message.channel.send(`I'm in \`${bot.guilds.size} guilds\`!`)
+    }
 
     } )
 
